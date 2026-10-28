@@ -1,30 +1,49 @@
 {
   "name": "telegram-download-bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "backend/src/server.js",
+  "description": "Telegram Download Bot & REST API migrated to Cloudflare Workers with D1 and Workers Assets",
+  "main": "src/worker.js",
   "scripts": {
-    "start": "node backend/src/server.js",
+    "start": "node index.js",
     "start:backend": "node backend/src/server.js",
     "start:bot": "node bot/bot.js",
+    "build": "npm run build:dashboard",
+    "build:dashboard": "cd dashboard && npm run build",
+    "deploy": "npm run build:dashboard && wrangler deploy --minify",
+    "dev:worker": "wrangler dev",
     "postinstall": "prisma generate --schema backend/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema backend/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema backend/prisma/schema.prisma",
     "prisma:seed": "node backend/prisma/seed.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "d1:migrate:local": "wrangler d1 migrations apply DB --local",
+    "d1:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "d1:seed:local": "wrangler d1 execute DB --local --file=migrations/0002_seed.sql",
+    "d1:seed:remote": "wrangler d1 execute DB --remote --file=migrations/0002_seed.sql",
+    "webhook:set": "node scripts/set-webhook.js",
+    "webhook:info": "node scripts/get-webhook-info.js",
+    "webhook:delete": "node scripts/delete-webhook.js",
+    "test": "node --test --test-concurrency=1 tests/**/*.test.js"
   },
-  "keywords": [],
+  "keywords": [
+    "telegram-bot",
+    "cloudflare-workers",
+    "cloudflare-d1",
+    "prisma"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^6.12.0",
+    "@prisma/adapter-d1": "^6.19.3",
+    "@prisma/client": "^6.19.3",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
+    "hono": "^4.7.4",
     "node-telegram-bot-api": "^0.66.0"
   },
   "devDependencies": {
-    "prisma": "^6.12.0"
+    "prisma": "^6.19.3",
+    "wrangler": "^4.154.0"
   }
 }

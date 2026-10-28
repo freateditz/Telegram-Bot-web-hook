@@ -11,8 +11,13 @@ async function handleResourceDeepLink(bot, chatId, msg) {
     console.log(`[Bot] Payload type: Resource`);
     console.log(`[Bot] Resource slug: ${slug}`);
 
-    // Store pending resource in local cache
+    // Store pending resource in local cache and database
     cacheService.setPendingResource(userId, slug);
+    try {
+        await backendClient.upsertPendingResource(userId, slug);
+    } catch (err) {
+        console.error(`[Resource Deep Link] Failed to persist pending resource for user=${userId}:`, err.message);
+    }
     
     const prompt = await backendClient.getVerificationPrompt();
     
@@ -102,8 +107,13 @@ async function deliverResource(bot, chatId, userId, resource) {
     } finally {
         // ALWAYS clear the pending pointer — success or failure. This
         // prevents a partial-failure path from leaving a stale slug
-        // in cacheService that would re-deliver on the next /start.
+        // in cacheService or DB that would re-deliver on the next /start.
         cacheService.clearPendingResource(userId);
+        try {
+            await backendClient.clearPendingResource(userId);
+        } catch (clearErr) {
+            console.error(`[Resource Deep Link] Failed to clear pending resource for user=${userId}:`, clearErr.message);
+        }
     }
 
     // Only report the error if nothing was successfully delivered

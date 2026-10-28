@@ -1,11 +1,39 @@
 const apiRoutes = require("../../shared/apiRoutes");
 
 function getBaseUrl() {
-    const raw = process.env.BACKEND_BASE_URL || `http://127.0.0.1:${process.env.PORT || process.env.BACKEND_PORT || 3000}`;
-    return raw.replace(/\/+$/, "");
+    const raw = process.env.BACKEND_BASE_URL || globalThis.__WORKER_BASE_URL;
+    if (raw) {
+        return raw.replace(/\/+$/, "");
+    }
+    if (process.env.NODE_ENV === "production") {
+        throw new Error("Configuration error: BACKEND_BASE_URL is not set in production environment.");
+    }
+    return `http://127.0.0.1:${process.env.PORT || process.env.BACKEND_PORT || 3000}`;
 }
 
 async function request(path, options = {}) {
+    // If running inside combined Cloudflare Worker, dispatch in-process
+    if (typeof globalThis.__INTERNAL_FETCH === "function") {
+        const url = `https://worker-internal${path}`;
+        const req = new Request(url, {
+            method: options.method || "GET",
+            headers: {
+                "Content-Type": "application/json",
+                ...(options.headers || {}),
+            },
+            body: options.body,
+        });
+
+        const response = await globalThis.__INTERNAL_FETCH(req);
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(payload.error || `Request failed: ${response.status}`);
+        }
+
+        return payload;
+    }
+
     const url = `${getBaseUrl()}${path}`;
     try {
         const response = await fetch(url, {
@@ -87,15 +115,13 @@ async function listMenuResources(platform, category) {
     const payload = await request(apiRoutes.resources.menu(platform, category));
     return payload.items || [];
 }
+
 async function getResource(platform, slug) {
     const payload = await request(apiRoutes.resources.detail(platform, slug));
     return payload.item || null;
 }
 
 async function getResourceBySlug(slug) {
-    // Calling a new endpoint /api/resources/slug/${slug}
-    // Assuming backend will handle this or it might fail if not implemented.
-    // Given the constraints, this is the best approach.
     const payload = await request(`/api/resources/slug/${slug}`);
     return payload.item || null;
 }
@@ -103,14 +129,8 @@ async function getResourceBySlug(slug) {
 async function getUserByTelegramId(telegramId) {
     try {
         const payload = await request(`/api/users/telegram/${telegramId}`);
-        // The backend wraps responses in `{ ok, item }`; callers here
-        // want the user row directly so they can read fields like
-        // `pendingProjectId` without an extra hop.
         return payload?.item ?? null;
     } catch (err) {
-        // 404 (no such user) is a normal "no pending project" signal
-        // for our caller — surface as null so the verification
-        // handler falls through to the main menu.
         if (/User not found|404/i.test(err.message)) {
             return null;
         }
@@ -118,11 +138,6 @@ async function getUserByTelegramId(telegramId) {
     }
 }
 
-/**
- * Idempotent: creates the user row if it doesn't exist, then sets the
- * pending project. Replaces the previous `setPendingProject` which
- * used `update` and would throw Prisma P2025 on first-time users.
- */
 async function upsertPendingProject(telegramId, projectId) {
     return request("/api/users/upsert-pending-project", {
         method: "POST",
@@ -132,6 +147,20 @@ async function upsertPendingProject(telegramId, projectId) {
 
 async function clearPendingProject(telegramId) {
     return request("/api/users/clear-pending-project", {
+        method: "POST",
+        body: JSON.stringify({ telegramId }),
+    });
+}
+
+async function upsertPendingResource(telegramId, slug) {
+    return request("/api/users/upsert-pending-resource", {
+        method: "POST",
+        body: JSON.stringify({ telegramId, slug }),
+    });
+}
+
+async function clearPendingResource(telegramId) {
+    return request("/api/users/clear-pending-resource", {
         method: "POST",
         body: JSON.stringify({ telegramId }),
     });
@@ -159,5 +188,8 @@ module.exports = {
     getUserByTelegramId,
     upsertPendingProject,
     clearPendingProject,
+    upsertPendingResource,
+    clearPendingResource,
     trackAnalyticsEvent,
+    getBaseUrl,
 };

@@ -1,34 +1,14 @@
 const dotenv = require("dotenv");
 const path = require("path");
 
-// Load .env from current directory or project root
+// Load .env from current directory or project root (for Node.js dev & test runs)
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
-console.log("DATABASE_URL check:", !!process.env.DATABASE_URL ? "Set" : "Not Set");
-
-/**
- * CORS allowlist resolution.
-...
- * Goal: production should "just work" on a fresh Railway deploy with
- * ZERO environment variables. So the default allowlist includes the
- * Vercel production domain (the one shipped in `dashboard/.env`) plus
- * the standard Vercel preview pattern.
- *
- * Resolution order (later lists EXTEND earlier ones — they are merged,
- * not replaced, so the defaults are always available):
- *   1. `CORS_ORIGINS` — comma-separated explicit list
- *   2. `FRONTEND_URL` — single origin (Vercel project env var)
- *
- * If neither is set, the production defaults below are used. Local
- * dev origins are always included.
- */
 const VERCEL_PREVIEW_REGEX = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
 
 const PRODUCTION_DEFAULTS = [
-  // The exact Vercel production URL the dashboard is shipped against.
   "https://telegram-bot-22xi.vercel.app",
-  // The Railway backend's own origin (harmless, sometimes useful).
   "https://telegram-bot-production-0b25.up.railway.app",
 ];
 
@@ -39,6 +19,8 @@ const LOCAL_DEFAULTS = [
   "http://127.0.0.1:3000",
 ];
 
+let workerOverrides = {};
+
 function parseList(raw) {
   return (raw || "")
     .split(",")
@@ -46,17 +28,19 @@ function parseList(raw) {
     .filter(Boolean);
 }
 
+function getVal(key, defaultVal = "") {
+  return workerOverrides[key] ?? process.env[key] ?? defaultVal;
+}
+
 function buildCorsOrigins() {
-  const explicit = parseList(process.env.CORS_ORIGINS);
-  const frontendUrl = (process.env.FRONTEND_URL || "").trim();
+  const explicit = parseList(getVal("CORS_ORIGINS"));
+  const frontendUrl = (getVal("FRONTEND_URL") || "").trim();
 
   const fromEnv = [...explicit];
   if (frontendUrl) {
     fromEnv.push(frontendUrl);
   }
 
-  // De-dupe while preserving order. Env-supplied origins come first
-  // (operator intent wins), then production defaults, then local.
   const seen = new Set();
   const merged = [];
   for (const origin of [...fromEnv, ...PRODUCTION_DEFAULTS, ...LOCAL_DEFAULTS]) {
@@ -68,34 +52,41 @@ function buildCorsOrigins() {
   return merged;
 }
 
-/**
- * Test whether a request `Origin` header is allowed.
- *
- * Accepts:
- *   - exact matches in `corsOrigins`
- *   - any `https://<sub>.vercel.app` (Vercel production + previews)
- *   - any `http://localhost:<port>` and `http://127.0.0.1:<port>` (dev)
- */
 function isOriginAllowed(origin, allowedList) {
   if (!origin) return true; // same-origin, curl, server-to-server
-  if (allowedList.includes(origin)) return true;
+  const list = allowedList || buildCorsOrigins();
+  if (list.includes(origin)) return true;
   if (VERCEL_PREVIEW_REGEX.test(origin)) return true;
   if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
   return false;
 }
 
-module.exports = {
-  nodeEnv: process.env.NODE_ENV || "development",
-  port: Number(process.env.PORT || process.env.BACKEND_PORT || 3000),
-  databaseUrl: process.env.DATABASE_URL || "",
-  botToken: process.env.BOT_TOKEN || "",
-  telegramChannel: process.env.CHANNEL || "",
-  youtubeUrl: process.env.YOUTUBE || "",
-  channelLink: process.env.CHANNEL_LINK || "",
+function initEnv(workerEnv = {}) {
+  workerOverrides = { ...workerEnv };
+  // Also populate process.env if available
+  if (typeof process !== "undefined" && process.env) {
+    for (const [k, v] of Object.entries(workerEnv)) {
+      if (typeof v === "string") {
+        process.env[k] = v;
+      }
+    }
+  }
+}
 
-  corsOrigins: buildCorsOrigins(),
-  frontendUrl: process.env.FRONTEND_URL || "",
+const envConfig = {
+  get nodeEnv() { return getVal("NODE_ENV", "development"); },
+  get port() { return Number(getVal("PORT", getVal("BACKEND_PORT", "3000"))); },
+  get databaseUrl() { return getVal("DATABASE_URL", ""); },
+  get botToken() { return getVal("BOT_TOKEN", ""); },
+  get webhookSecret() { return getVal("WEBHOOK_SECRET", ""); },
+  get telegramChannel() { return getVal("CHANNEL", ""); },
+  get youtubeUrl() { return getVal("YOUTUBE", ""); },
+  get channelLink() { return getVal("CHANNEL_LINK", ""); },
+  get frontendUrl() { return getVal("FRONTEND_URL", ""); },
+  get corsOrigins() { return buildCorsOrigins(); },
 
-  // Exported for use by the CORS middleware's dynamic origin callback.
   isOriginAllowed,
+  initEnv,
 };
+
+module.exports = envConfig;

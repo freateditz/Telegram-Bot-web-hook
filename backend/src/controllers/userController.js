@@ -60,6 +60,20 @@ const clearPendingProject = asyncHandler(async (req, res) => {
   res.json({ ok: true });
 });
 
+const upsertPendingResource = asyncHandler(async (req, res) => {
+  const { telegramId, slug } = req.body || {};
+  if (!telegramId || !slug) {
+    return res.status(400).json({ ok: false, error: "telegramId and slug are required" });
+  }
+  const item = await userService.upsertPendingResource(telegramId, slug);
+  res.json({ ok: true, item });
+});
+
+const clearPendingResource = asyncHandler(async (req, res) => {
+  await userService.clearPendingResource(req.body.telegramId);
+  res.json({ ok: true });
+});
+
 module.exports = {
   listUsers,
   getUser,
@@ -70,4 +84,6 @@ module.exports = {
   setPendingProject,
   upsertPendingProject,
   clearPendingProject,
+  upsertPendingResource,
+  clearPendingResource,
 };

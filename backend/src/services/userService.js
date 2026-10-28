@@ -107,6 +107,23 @@ async function clearPendingProject(telegramId) {
   });
 }
 
+async function upsertPendingResource(telegramId, slug) {
+  const normalized = String(telegramId).trim();
+  return prisma.user.upsert({
+    where: { telegramId: normalized },
+    create: { telegramId: normalized, pendingResourceSlug: slug },
+    update: { pendingResourceSlug: slug },
+  });
+}
+
+async function clearPendingResource(telegramId) {
+  const normalized = String(telegramId).trim();
+  return prisma.user.updateMany({
+    where: { telegramId: normalized },
+    data: { pendingResourceSlug: null },
+  });
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -119,4 +136,6 @@ module.exports = {
   setPendingProject,
   upsertPendingProject,
   clearPendingProject,
+  upsertPendingResource,
+  clearPendingResource,
 };

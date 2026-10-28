@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 /// A source Telegram channel that holds the actual file messages.
@@ -101,12 +101,18 @@ model Setting {
 }
 
 model User {
-  id               Int      @id @default(autoincrement())
-  telegramId       String   @unique
-  verified         Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  pendingProjectId Int?
-  pendingProject   Project? @relation(fields: [pendingProjectId], references: [id])
+  id                  Int      @id @default(autoincrement())
+  telegramId          String   @unique
+  verified            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  pendingProjectId    Int?
+  pendingProject      Project? @relation(fields: [pendingProjectId], references: [id])
+  pendingResourceSlug String?
+}
+
+model TelegramUpdate {
+  updateId    String   @id
+  processedAt DateTime @default(now())
 }
 
 model AnalyticsEvent {

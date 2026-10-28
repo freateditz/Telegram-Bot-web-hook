@@ -1,11 +1,38 @@
 const apiRoutes = require("../../shared/apiRoutes");
 
 function getBaseUrl() {
-    const raw = process.env.BACKEND_BASE_URL || `http://127.0.0.1:${process.env.PORT || process.env.BACKEND_PORT || 3000}`;
-    return raw.replace(/\/+$/, "");
+    const raw = process.env.BACKEND_BASE_URL || globalThis.__WORKER_BASE_URL;
+    if (raw) {
+        return raw.replace(/\/+$/, "");
+    }
+    if (process.env.NODE_ENV === "production") {
+        throw new Error("Configuration error: BACKEND_BASE_URL is not set in production environment.");
+    }
+    return `http://127.0.0.1:${process.env.PORT || process.env.BACKEND_PORT || 3000}`;
 }
 
 async function request(path, options = {}) {
+    if (typeof globalThis.__INTERNAL_FETCH === "function") {
+        const url = `https://worker-internal${path}`;
+        const req = new Request(url, {
+            method: options.method || "GET",
+            headers: {
+                "Content-Type": "application/json",
+                ...(options.headers || {}),
+            },
+            body: options.body,
+        });
+
+        const response = await globalThis.__INTERNAL_FETCH(req);
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(payload.error || `Request failed: ${response.status}`);
+        }
+
+        return payload;
+    }
+
     const response = await fetch(`${getBaseUrl()}${path}`, {
         headers: {
             "Content-Type": "application/json",
@@ -33,17 +60,6 @@ async function getProjectById(id) {
     return payload.item || null;
 }
 
-/**
- * Returns the project plus a `delivery` block describing exactly which
- * strategy the bot should use:
- *   { item, delivery: { strategy: "channel", chatId, messageId, channelName } }
- *   { item, delivery: { strategy: "file", fileId } }
- *   { item, delivery: { strategy: "link", messageLink } }
- *   { item, delivery: { strategy: "unavailable", reason } }
- *
- * The bot never inspects / parses any URLs itself; the backend does
- * the channel/message validation up front and the bot just dispatches.
- */
 async function getProjectDelivery(slug) {
     return request(apiRoutes.projects.delivery(slug));
 }
@@ -52,4 +68,5 @@ module.exports = {
     getProject,
     getProjectById,
     getProjectDelivery,
+    getBaseUrl,
 };

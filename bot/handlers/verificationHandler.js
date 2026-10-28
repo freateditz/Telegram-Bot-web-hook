@@ -17,7 +17,7 @@ async function routeAfterVerification(bot, chatId, userId) {
         return deliverPendingProject(bot, chatId, userId, user.pendingProjectId);
     }
 
-    const pendingResourceSlug = cacheService.getPendingResource(userId);
+    const pendingResourceSlug = (user && user.pendingResourceSlug) || cacheService.getPendingResource(userId);
     if (pendingResourceSlug) {
         console.log(`[verify] Pending resource found user=${userId} slug=${pendingResourceSlug} — delivering`);
         return deliverPendingResource(bot, chatId, userId, pendingResourceSlug);
@@ -39,12 +39,14 @@ async function deliverPendingResource(bot, chatId, userId, slug) {
         console.error(`[Resource Deep Link] Resource lookup failed for slug=${slug}:`, error.message);
         console.error(error.stack);
         cacheService.clearPendingResource(userId);
+        backendClient.clearPendingResource(userId).catch(() => {});
         return bot.sendMessage(chatId, `❌ An error occurred while preparing your download: ${error.message}`);
     }
     
     if (!resource) {
         console.log(`[Resource Deep Link] Resource not found for slug=${slug}`);
         cacheService.clearPendingResource(userId);
+        backendClient.clearPendingResource(userId).catch(() => {});
         return bot.sendMessage(chatId, "❌ Resource not found.");
     }
 

@@ -57,9 +57,10 @@ module.exports = function registerStartCommand(bot) {
                 console.error(`[start] clearPendingProject failed for user=${userId}:`, err.message);
             }
 
-            // 3. Pending resource slug (in-memory).
+            // 3. Pending resource slug (in-memory + database).
             try {
                 cacheService.clearPendingResource(userId);
+                await backendClient.clearPendingResource(userId);
             } catch (err) {
                 console.error(`[start] clearPendingResource failed for user=${userId}:`, err.message);
             }

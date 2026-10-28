@@ -5,3 +5,6 @@ node_modules
 !.env.production
 backend/prisma/dev.db
 backend/prisma/*.db-journal
+.wrangler
+tests/*.db
+tests/*.db-journal

@@ -12,5 +12,7 @@ router.delete("/:id", userController.deleteUser);
 router.post("/pending-project", userController.setPendingProject);
 router.post("/upsert-pending-project", userController.upsertPendingProject);
 router.post("/clear-pending-project", userController.clearPendingProject);
+router.post("/upsert-pending-resource", userController.upsertPendingResource);
+router.post("/clear-pending-resource", userController.clearPendingResource);
 
 module.exports = router;
