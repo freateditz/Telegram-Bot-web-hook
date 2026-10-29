@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProjectDialog } from "@/components/projects/ProjectDialog";
 import { DeleteProjectDialog } from "@/components/projects/DeleteProjectDialog";
 import { useProjects } from "@/hooks/useProjects";
-import { env } from "@/config/env";
+import { buildProjectDeepLink } from "@/lib/deepLink";
 import type { Project } from "@/types";
 
 export function ProjectsPage() {
@@ -58,8 +58,7 @@ export function ProjectsPage() {
   };
 
   // Deep links are generated dynamically — never stored in the DB.
-  const buildDeepLink = (slug: string) =>
-    `https://t.me/${env.botUsername}?start=project_${slug}`;
+  const buildDeepLink = (slug: string) => buildProjectDeepLink(slug);
 
   const filtered = useMemo(() => {
     const data = projectsQuery.data ?? [];

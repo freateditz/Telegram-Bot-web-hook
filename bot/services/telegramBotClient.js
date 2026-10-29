@@ -3,7 +3,7 @@
  *
  * Implements the exact same method signatures used by the bot handlers
  * (`sendMessage`, `copyMessage`, `sendDocument`, `answerCallbackQuery`,
- * `editMessageReplyMarkup`, `onText`, `on`), using native Web standard `fetch`.
+ * `editMessageReplyMarkup`, `getChatMember`, `onText`, `on`), using native Web standard `fetch`.
  *
  * Avoids any Node.js streams, child processes, or long-polling dependencies.
  */
@@ -16,6 +16,17 @@ class TelegramBotClient {
         this.apiBase = options.apiBase || "https://api.telegram.org";
         this.textHandlers = [];
         this.eventHandlers = new Map();
+    }
+
+    /**
+     * Redact bot token from strings and errors.
+     */
+    _sanitize(str) {
+        if (!str || typeof str !== "string") return str;
+        if (this.token) {
+            return str.replaceAll(this.token, "[REDACTED_BOT_TOKEN]");
+        }
+        return str;
     }
 
     /**
@@ -52,7 +63,8 @@ class TelegramBotClient {
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok || !data.ok) {
-                const desc = data.description || response.statusText || `HTTP ${response.status}`;
+                const rawDesc = data.description || response.statusText || `HTTP ${response.status}`;
+                const desc = this._sanitize(rawDesc);
                 console.error(`[TelegramBot API] ${method} error: ${desc}`);
                 const err = new Error(`Telegram API error (${method}): ${desc}`);
                 err.code = data.error_code || response.status;
@@ -62,9 +74,7 @@ class TelegramBotClient {
 
             return data.result;
         } catch (error) {
-            // Protect bot token from ever leaking in error messages or logs
-            const sanitizedMessage = (error.message || "").replace(new RegExp(this.token, "g"), "[REDACTED_BOT_TOKEN]");
-            error.message = sanitizedMessage;
+            error.message = this._sanitize(error.message);
             throw error;
         }
     }
@@ -103,8 +113,18 @@ class TelegramBotClient {
         if (update.callback_query) {
             const query = update.callback_query;
             const callbackHandlers = this.eventHandlers.get("callback_query") || [];
-            for (const handler of callbackHandlers) {
-                await handler(query);
+
+            try {
+                for (const handler of callbackHandlers) {
+                    await handler(query);
+                }
+            } catch (handlerErr) {
+                console.error(`[TelegramBot] Callback query handler error for query=${query.id}:`, this._sanitize(handlerErr.message));
+                // Safety: ensure Telegram's spinner does not remain stuck
+                try {
+                    await this.answerCallbackQuery(query.id);
+                } catch (_) {}
+                throw handlerErr;
             }
 
             return { ok: true, handled: "callback_query" };
@@ -151,10 +171,18 @@ class TelegramBotClient {
      * Answer an incoming callback query.
      */
     async answerCallbackQuery(callbackQueryId, form = {}) {
-        return this.apiCall("answerCallbackQuery", {
-            callback_query_id: callbackQueryId,
-            ...form,
-        });
+        try {
+            return await this.apiCall("answerCallbackQuery", {
+                callback_query_id: callbackQueryId,
+                ...form,
+            });
+        } catch (err) {
+            // If already answered or expired, don't crash caller flow
+            if (/query is too old|query ID is invalid/i.test(err.message)) {
+                return null;
+            }
+            throw err;
+        }
     }
 
     /**
@@ -164,6 +192,16 @@ class TelegramBotClient {
         return this.apiCall("editMessageReplyMarkup", {
             reply_markup: replyMarkup,
             ...form,
+        });
+    }
+
+    /**
+     * Get chat member information (for subscription verification).
+     */
+    async getChatMember(chatId, userId) {
+        return this.apiCall("getChatMember", {
+            chat_id: chatId,
+            user_id: Number(userId),
         });
     }
 

@@ -46,18 +46,56 @@ async function deleteUser(id) {
   return prisma.user.delete({ where: { id } });
 }
 
-async function markVerifiedByTelegramId(telegramId) {
+/**
+ * Transaction-free safe upsert for Cloudflare D1.
+ * D1 does not support interactive transactions; Prisma's built-in upsert
+ * uses an implicit transaction which generates repeated warnings and can break
+ * under D1's execution model.
+ */
+async function upsertUser(telegramId, dataToSet = {}) {
   const normalized = String(telegramId).trim();
-
   if (!normalized) {
     throw new HttpError(400, "telegramId is required");
   }
 
-  return prisma.user.upsert({
+  const existing = await prisma.user.findUnique({
     where: { telegramId: normalized },
-    create: { telegramId: normalized, verified: true },
-    update: { verified: true },
   });
+
+  if (existing) {
+    if (Object.keys(dataToSet).length > 0) {
+      return prisma.user.update({
+        where: { telegramId: normalized },
+        data: dataToSet,
+      });
+    }
+    return existing;
+  }
+
+  try {
+    return await prisma.user.create({
+      data: {
+        telegramId: normalized,
+        ...dataToSet,
+      },
+    });
+  } catch (err) {
+    // If concurrently created by a racing request, update the existing row
+    if (err.code === "P2002") {
+      if (Object.keys(dataToSet).length > 0) {
+        return prisma.user.update({
+          where: { telegramId: normalized },
+          data: dataToSet,
+        });
+      }
+      return prisma.user.findUnique({ where: { telegramId: normalized } });
+    }
+    throw err;
+  }
+}
+
+async function markVerifiedByTelegramId(telegramId) {
+  return upsertUser(telegramId, { verified: true });
 }
 
 async function markUnverifiedByTelegramId(telegramId) {
@@ -83,24 +121,14 @@ async function setPendingProject(telegramId, projectId) {
 
 /**
  * Idempotent: creates the user row if it doesn't exist, then sets the
- * pending project. Used by the bot when a deep link is hit by a user
- * who has never interacted with the bot before — `setPendingProject`
- * would throw Prisma P2025 in that case.
+ * pending project.
  */
 async function upsertPendingProject(telegramId, projectId) {
-  const normalized = String(telegramId).trim();
-  return prisma.user.upsert({
-    where: { telegramId: normalized },
-    create: { telegramId: normalized, pendingProjectId: projectId },
-    update: { pendingProjectId: projectId },
-  });
+  return upsertUser(telegramId, { pendingProjectId: projectId });
 }
 
 async function clearPendingProject(telegramId) {
   const normalized = String(telegramId).trim();
-  // Use updateMany (not update) so this is a no-op for users that don't
-  // exist yet — /start fires this on every session, including for
-  // brand-new users who have no row in the User table.
   return prisma.user.updateMany({
     where: { telegramId: normalized },
     data: { pendingProjectId: null },
@@ -108,12 +136,7 @@ async function clearPendingProject(telegramId) {
 }
 
 async function upsertPendingResource(telegramId, slug) {
-  const normalized = String(telegramId).trim();
-  return prisma.user.upsert({
-    where: { telegramId: normalized },
-    create: { telegramId: normalized, pendingResourceSlug: slug },
-    update: { pendingResourceSlug: slug },
-  });
+  return upsertUser(telegramId, { pendingResourceSlug: slug });
 }
 
 async function clearPendingResource(telegramId) {
@@ -131,6 +154,7 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  upsertUser,
   markVerifiedByTelegramId,
   markUnverifiedByTelegramId,
   setPendingProject,

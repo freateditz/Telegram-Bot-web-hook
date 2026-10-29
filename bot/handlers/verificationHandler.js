@@ -27,8 +27,6 @@ async function routeAfterVerification(bot, chatId, userId) {
     return telegramService.showHome(bot, chatId, backendClient);
 }
 
-// ... existing code ...
-
 async function deliverPendingResource(bot, chatId, userId, slug) {
     console.log(`[Resource Deep Link] Loading resource slug=${slug}`);
     let resource;
@@ -36,8 +34,13 @@ async function deliverPendingResource(bot, chatId, userId, slug) {
         resource = await backendClient.getResourceBySlug(slug);
         console.log(`[Resource Deep Link] Resource lookup result:`, resource ? `found id=${resource.id}` : "not found");
     } catch (error) {
+        if (error.message && error.message.toLowerCase().includes("not found")) {
+            console.log(`[Resource Deep Link] Resource not found for slug=${slug}`);
+            cacheService.clearPendingResource(userId);
+            backendClient.clearPendingResource(userId).catch(() => {});
+            return bot.sendMessage(chatId, "❌ Resource not found.");
+        }
         console.error(`[Resource Deep Link] Resource lookup failed for slug=${slug}:`, error.message);
-        console.error(error.stack);
         cacheService.clearPendingResource(userId);
         backendClient.clearPendingResource(userId).catch(() => {});
         return bot.sendMessage(chatId, `❌ An error occurred while preparing your download: ${error.message}`);
@@ -52,14 +55,14 @@ async function deliverPendingResource(bot, chatId, userId, slug) {
 
     // Call the delivery logic in resourceHandler.js
     console.log(`[Resource Deep Link] Preparing delivery for resource id=${resource.id}`);
-    return deliverResource(bot, chatId, userId, resource); // Passing the resource object instead of just slug
+    return deliverResource(bot, chatId, userId, resource);
 }
 
 module.exports = async function handleVerification(bot, query) {
     const chatId = query.message.chat.id;
     const userId = query.from.id;
 
-    // Track VERIFY_CLICK
+    // Track VERIFY_CLICK (best-effort)
     try {
         await backendClient.trackAnalyticsEvent({
             userId,
@@ -70,18 +73,29 @@ module.exports = async function handleVerification(bot, query) {
         console.error(`[verify] Analytics tracking failed:`, err.message);
     }
 
-    await bot.answerCallbackQuery(query.id);
+    // Ensure query is answered (in case callbackHandler's call was delayed or threw)
+    try {
+        await bot.answerCallbackQuery(query.id);
+    } catch (_) {}
 
     const state = await backendClient.getVerificationStatus(userId);
 
     // Already verified (e.g. user tapped Verify again on the prompt):
-    // skip the channel-join check and route straight to the post-
-    // verification decision.
+    // skip the channel-join check and route straight to post-verification decision.
     if (state.verified) {
         return routeAfterVerification(bot, chatId, userId);
     }
 
-    const joined = await backendClient.checkChannelMember(userId);
+    let joined = false;
+    try {
+        joined = await backendClient.checkChannelMember(userId);
+    } catch (checkErr) {
+        console.error(`[verify] Channel membership check failed user=${userId}:`, checkErr.message);
+        return bot.sendMessage(
+            chatId,
+            "⚠️ Unable to verify channel membership right now. Please ensure you joined the channel, then tap Check Access again."
+        );
+    }
 
     if (!joined) {
         const user = await backendClient.getUserByTelegramId(userId);
@@ -158,10 +172,6 @@ async function deliverPendingProject(bot, chatId, userId, projectId) {
         return bot.sendMessage(chatId, "🚫 This project's source channel is currently unavailable.");
     }
 
-    // Re-fetch the project via the delivery endpoint so we get the
-    // same strategy the deep-link handler would have used. This means
-    // there's only ONE place in the codebase that knows how to choose
-    // between channel / file / link / unavailable.
     let result;
     try {
         result = await projectService.getProjectDelivery(project.slug);

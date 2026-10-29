@@ -1,9 +1,17 @@
-const dotenv = require("dotenv");
-const path = require("path");
+const isCloudflareWorker =
+  (typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers") ||
+  typeof WebSocketPair !== "undefined";
 
-// Load .env from current directory or project root (for Node.js dev & test runs)
-dotenv.config();
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+// In Node.js environments (local dev & test runs), load .env if present.
+// In Cloudflare Workers, runtime bindings/secrets are passed via initEnv() or c.env.
+if (!isCloudflareWorker && typeof process !== "undefined" && process.versions?.node) {
+  try {
+    const dotenv = require("dotenv");
+    dotenv.config();
+  } catch (_) {
+    // Ignore if dotenv is not present or inaccessible
+  }
+}
 
 const VERCEL_PREVIEW_REGEX = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
 
@@ -29,7 +37,11 @@ function parseList(raw) {
 }
 
 function getVal(key, defaultVal = "") {
-  return workerOverrides[key] ?? process.env[key] ?? defaultVal;
+  return (
+    workerOverrides[key] ??
+    (typeof process !== "undefined" && process.env ? process.env[key] : undefined) ??
+    defaultVal
+  );
 }
 
 function buildCorsOrigins() {

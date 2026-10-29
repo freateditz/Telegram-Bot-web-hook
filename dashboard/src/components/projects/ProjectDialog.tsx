@@ -18,7 +18,7 @@ import {
 } from "@/hooks/useProjects";
 import type { Project, ProjectInput } from "@/types";
 import type { ProjectFormValues } from "@/lib/projectSchema";
-import { env } from "@/config/env";
+import { buildProjectDeepLink } from "@/lib/deepLink";
 
 interface ProjectDialogProps {
   open: boolean;
@@ -113,7 +113,7 @@ function CreatedDialog({
   onClose: () => void;
 }) {
   if (!slug) return null;
-  const url = `https://t.me/${env.botUsername}?start=project_${slug}`;
+  const url = buildProjectDeepLink(slug);
 
   return (
     <Dialog open={Boolean(slug)} onOpenChange={(open) => !open && onClose()}>

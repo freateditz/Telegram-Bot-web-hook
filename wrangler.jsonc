@@ -3,7 +3,9 @@
   "name": "telegram-download-bot",
   "main": "src/worker.js",
   "compatibility_date": "2024-11-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "directory": "./dashboard/dist",
     "binding": "ASSETS"
@@ -12,14 +14,20 @@
     {
       "binding": "DB",
       "database_name": "telegram-bot-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "937296a8-e3f1-49b7-859f-32b42573f2e4",
       "migrations_dir": "migrations"
     }
   ],
   "triggers": {
-    "crons": ["0 0 * * *"]
+    "crons": [
+      "0 0 * * *"
+    ]
   },
   "vars": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "CHANNEL": "@freat_editz",
+    "CHANNEL_LINK": "https://t.me/freat_editz",
+    "YOUTUBE": "https://youtube.com/@freat_editz",
+    "CORS_ORIGINS": "https://telegram-bot-22xi.vercel.app"
   }
 }

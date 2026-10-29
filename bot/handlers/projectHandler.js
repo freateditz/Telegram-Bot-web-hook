@@ -45,6 +45,10 @@ async function handleProjectDeepLink(bot, chatId, msg) {
   try {
     result = await projectService.getProjectDelivery(slug);
   } catch (error) {
+    if (error.message && error.message.toLowerCase().includes("not found")) {
+      console.log(`[project] Project not found slug="${slug}"`);
+      return bot.sendMessage(chatId, "❌ Project not found.\nThe project may have been removed or the link is invalid.");
+    }
     console.error(`[project] Delivery lookup failed for slug="${slug}":`, error.message);
     return bot.sendMessage(chatId, "❌ An error occurred while looking up the project.");
   }

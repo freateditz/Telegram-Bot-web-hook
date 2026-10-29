@@ -63,6 +63,11 @@ function normalizeChatId(raw) {
     cleaned = cleaned.replace(/^https?:\/\/(www\.)?(t|telegram)\.me\//i, "");
     // Remove query params and trailing slashes
     cleaned = cleaned.split("?")[0].replace(/\/+$/, "").trim();
+
+    if (cleaned.startsWith("+") || cleaned.startsWith("joinchat/")) {
+        console.warn(`[isChannelMember] Configured CHANNEL appears to be a private invite link ("${cleaned}"). Telegram getChatMember requires a public @username or numeric channel ID (-100...) where the bot is an administrator.`);
+    }
+
     if (/^-?\d+$/.test(cleaned)) {
         return cleaned;
     }
@@ -101,10 +106,14 @@ async function isChannelMember(telegramId) {
             }),
         });
 
-        const payload = await response.json();
+        const payload = await response.json().catch(() => ({}));
 
-        if (!payload.ok) {
-            console.error(`[isChannelMember] Telegram getChatMember error for user=${telegramId} chat=${chatId}:`, payload.description);
+        if (!response.ok || !payload.ok) {
+            const desc = payload.description || response.statusText || `HTTP ${response.status}`;
+            console.error(`[isChannelMember] Telegram getChatMember error for user=${telegramId} chat=${chatId}: ${desc}`);
+            if (/CHAT_ADMIN_REQUIRED|chat not found/i.test(desc)) {
+                console.warn(`[isChannelMember] Notice: Ensure the Telegram bot is added as an administrator to "${chatId}" so it has permission to inspect chat members.`);
+            }
             return false;
         }
 
@@ -113,7 +122,8 @@ async function isChannelMember(telegramId) {
 
         return ["member", "administrator", "creator"].includes(status) || (status === "restricted" && isMember === true);
     } catch (error) {
-        console.error(`[isChannelMember] Error checking channel membership for user=${telegramId}:`, error.message);
+        const sanitizedMsg = env.botToken ? (error.message || "").replaceAll(env.botToken, "[REDACTED_BOT_TOKEN]") : error.message;
+        console.error(`[isChannelMember] Error checking channel membership for user=${telegramId}:`, sanitizedMsg);
         return false;
     }
 }
@@ -125,4 +135,5 @@ module.exports = {
     markUnverified,
     isChannelMember,
     buildChannelLink,
+    normalizeChatId,
 };

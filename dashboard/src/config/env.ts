@@ -29,8 +29,8 @@ interface AppEnv {
 }
 
 function normalizeBaseUrl(raw: string | undefined): string {
-  // Fallback to localhost if not defined
-  const baseUrl = raw || "http://localhost:3000/api";
+  // Default to relative "/api" so production same-origin requests work without configuration.
+  const baseUrl = raw || "/api";
 
   // Strip any trailing slashes so `${apiBaseUrl}/resources` always
   // produces `/api/resources` — never `//resources`.
@@ -43,7 +43,9 @@ function readEnv(): AppEnv {
     import.meta.env.VITE_API_BASE_URL || (import.meta.env as unknown as { VITE_API_URL?: string }).VITE_API_URL
   );
 
-  console.log("Resolved API URL:", apiBaseUrl);
+  if (import.meta.env.DEV) {
+    console.log("Resolved API URL:", apiBaseUrl);
+  }
 
   const appName =
     import.meta.env.VITE_APP_NAME || "Admin Dashboard";

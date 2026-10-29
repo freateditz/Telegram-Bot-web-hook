@@ -14,14 +14,18 @@ function getBaseUrl() {
 async function request(path, options = {}) {
     if (typeof globalThis.__INTERNAL_FETCH === "function") {
         const url = `https://worker-internal${path}`;
-        const req = new Request(url, {
+        const reqInit = {
             method: options.method || "GET",
             headers: {
                 "Content-Type": "application/json",
                 ...(options.headers || {}),
             },
-            body: options.body,
-        });
+        };
+        if (options.body && reqInit.method !== "GET" && reqInit.method !== "HEAD") {
+            reqInit.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+        }
+
+        const req = new Request(url, reqInit);
 
         const response = await globalThis.__INTERNAL_FETCH(req);
         const payload = await response.json().catch(() => ({}));

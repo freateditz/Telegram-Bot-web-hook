@@ -25,6 +25,7 @@ import {
   type ResourceFormValues,
 } from "@/lib/resourceSchema";
 import { toSlug } from "@/lib/slug";
+import { buildResourceDeepLink } from "@/lib/deepLink";
 import type { Resource } from "@/types";
 
 interface ResourceFormProps {
@@ -101,7 +102,7 @@ export function ResourceForm({
     }
   }, [name, slugTouched, setValue]);
 
-  const deepLink = `https://t.me/FreatEditzResources_Bot?start=resource_${slug || "..."}`;
+  const deepLink = buildResourceDeepLink(slug);
 
   const copyDeepLink = useCallback(() => {
     navigator.clipboard.writeText(deepLink);

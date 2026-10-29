@@ -4,7 +4,20 @@ const telegramService = require("../services/telegramService");
 const handleVerification = require("./verificationHandler");
 
 module.exports = async function handleCallback(bot, query) {
-    if (!query || !query.data || !query.message) {
+    if (!query) {
+        return;
+    }
+
+    // Always answer callback query immediately so the Telegram button loading spinner stops
+    if (query.id) {
+        try {
+            await bot.answerCallbackQuery(query.id);
+        } catch (err) {
+            console.warn(`[Callback] answerCallbackQuery notice: ${err.message}`);
+        }
+    }
+
+    if (!query.data || !query.message) {
         return;
     }
 
@@ -16,7 +29,6 @@ module.exports = async function handleCallback(bot, query) {
         const state = await backendClient.getVerificationStatus(userId);
 
         if (!state.verified) {
-            await bot.answerCallbackQuery(query.id);
             const prompt = await backendClient.getVerificationPrompt();
             return telegramService.sendVerificationPrompt(bot, chatId, prompt);
         }
@@ -27,29 +39,27 @@ module.exports = async function handleCallback(bot, query) {
         return handleVerification(bot, query);
 
     case callbackTypes.home:
-        await bot.answerCallbackQuery(query.id);
         return telegramService.showHome(bot, chatId, backendClient, query);
 
     case callbackTypes.platform:
-        await bot.answerCallbackQuery(query.id);
         return telegramService.showCategoryMenu(bot, chatId, firstArg, backendClient, query);
 
     case callbackTypes.category:
-        await bot.answerCallbackQuery(query.id);
         return telegramService.showResourceMenu(bot, chatId, firstArg, secondArg, backendClient, query);
 
     case callbackTypes.resource:
-        await bot.answerCallbackQuery(query.id);
         return telegramService.sendResourceDetails(bot, chatId, firstArg, secondArg, backendClient, query);
 
     case callbackTypes.tutorial:
-        await bot.answerCallbackQuery(query.id);
         // format: tutorial:channelId:messageId -> firstArg is channelId, secondArg is messageId
-        return telegramService.sendTutorial(bot, chatId, firstArg, secondArg);
+        try {
+            return await telegramService.sendTutorial(bot, chatId, firstArg, secondArg);
+        } catch (err) {
+            console.error(`[Callback] Tutorial send failed:`, err.message);
+            return bot.sendMessage(chatId, "⚠️ Tutorial message is currently unavailable.");
+        }
 
     case callbackTypes.back:
-        await bot.answerCallbackQuery(query.id);
-
         if (firstArg === "home") {
             return telegramService.showHome(bot, chatId, backendClient, query);
         }
@@ -65,7 +75,7 @@ module.exports = async function handleCallback(bot, query) {
         return telegramService.showHome(bot, chatId, backendClient, query);
 
     default:
-        await bot.answerCallbackQuery(query.id);
+        console.warn(`[Callback] Unhandled callback action "${action}" with data "${query.data}"`);
         return null;
     }
 };

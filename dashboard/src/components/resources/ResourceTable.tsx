@@ -1,4 +1,6 @@
-import { Pencil, Trash2, ArrowUpDown } from "lucide-react";
+import { Pencil, Trash2, ArrowUpDown, Copy } from "lucide-react";
+import { toast } from "sonner";
+import { buildResourceDeepLink } from "@/lib/deepLink";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -138,6 +140,22 @@ export function ResourceTable({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
+                  {r.slug && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        const link = buildResourceDeepLink(r.slug);
+                        navigator.clipboard.writeText(link);
+                        toast.success("Resource deep link copied!");
+                      }}
+                      aria-label={`Copy deep link for ${r.name}`}
+                      title="Copy Telegram deep link"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"

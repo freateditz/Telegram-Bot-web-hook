@@ -24,7 +24,7 @@ import {
 } from "@/lib/projectSchema";
 import { toSlug } from "@/lib/slug";
 import { useChannels } from "@/hooks/useChannels";
-import { env } from "@/config/env";
+import { buildProjectDeepLink } from "@/lib/deepLink";
 import type { Project } from "@/types";
 
 interface ProjectFormProps {
@@ -260,7 +260,7 @@ function DeepLinkPreview({ slug }: { slug: string | undefined }) {
     );
   }
 
-  const url = `https://t.me/${env.botUsername}?start=project_${slug}`;
+  const url = buildProjectDeepLink(slug);
 
   return (
     <div className="rounded-md border border-border bg-muted/20 px-3 py-2">

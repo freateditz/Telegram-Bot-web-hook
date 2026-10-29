@@ -1,4 +1,5 @@
 const prisma = require('../database/prisma');
+const userService = require('./userService');
 
 const trackEvent = async ({ userId, projectId, resourceId, eventType, metadata }) => {
   try {
@@ -6,14 +7,12 @@ const trackEvent = async ({ userId, projectId, resourceId, eventType, metadata }
       throw new Error('userId and eventType are required');
     }
 
-    // Resolve or upsert the User record so that AnalyticsEvent.userId stores the internal
-    // 32-bit User.id instead of raw Telegram ID which can exceed signed 32-bit integer limits (> 2.14B).
-    const telegramId = String(userId).trim();
-    const user = await prisma.user.upsert({
-      where: { telegramId },
-      create: { telegramId },
-      update: {},
-    });
+    // Resolve or upsert User record so AnalyticsEvent.userId stores internal User.id
+    const user = await userService.upsertUser(userId);
+
+    const serializedMetadata = typeof metadata === 'object' && metadata !== null
+      ? JSON.stringify(metadata)
+      : (metadata || null);
 
     await prisma.analyticsEvent.create({
       data: {
@@ -21,12 +20,12 @@ const trackEvent = async ({ userId, projectId, resourceId, eventType, metadata }
         projectId: projectId ? Number(projectId) : null,
         resourceId: resourceId ? Number(resourceId) : null,
         eventType,
-        metadata: metadata || null,
+        metadata: serializedMetadata,
       },
     });
     return { success: true };
   } catch (error) {
-    console.error('Failed to track analytics event:', error);
+    console.error('Failed to track analytics event:', error.message || error);
     return { success: false, error: error.message };
   }
 };

@@ -146,7 +146,7 @@ async function getProjectForDelivery(slug) {
   const project = await getProjectBySlug(slug);
   if (!project) return null;
   if (!project.isActive) return { project, blocked: "project_inactive" };
-  if (project.channelId && project.channel && !project.channel.isActive) {
+  if (project.channelId && (!project.channel || !project.channel.isActive)) {
     return { project, blocked: "channel_inactive" };
   }
   if (!hasNewDelivery(project) && !hasLegacyDelivery(project)) {

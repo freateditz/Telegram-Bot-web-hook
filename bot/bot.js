@@ -1,6 +1,12 @@
-const path = require("path");
-require("dotenv").config();
-require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+const isCloudflareWorker =
+    (typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers") ||
+    typeof WebSocketPair !== "undefined";
+
+if (!isCloudflareWorker && typeof process !== "undefined" && process.versions?.node) {
+    try {
+        require("dotenv").config();
+    } catch (_) {}
+}
 
 const registerStartCommand = require("./commands/start");
 const handleCallbackQuery = require("./handlers/callbackHandler");
@@ -30,16 +36,25 @@ function getWebhookBot(token) {
     // Register all bot commands and event handlers
     registerStartCommand(bot);
 
-    bot.on("callback_query", (query) => {
-        handleCallbackQuery(bot, query).catch((error) => {
-            console.error("Callback handler error:", error);
-        });
+    bot.on("callback_query", async (query) => {
+        try {
+            return await handleCallbackQuery(bot, query);
+        } catch (error) {
+            console.error("[Bot] Callback handler error:", error.message || error);
+            try {
+                await bot.answerCallbackQuery(query.id);
+            } catch (_) {}
+            throw error;
+        }
     });
 
-    bot.on("message", (msg) => {
-        handleMessage(bot, msg).catch((error) => {
-            console.error("Message handler error:", error);
-        });
+    bot.on("message", async (msg) => {
+        try {
+            return await handleMessage(bot, msg);
+        } catch (error) {
+            console.error("[Bot] Message handler error:", error.message || error);
+            throw error;
+        }
     });
 
     webhookBotInstance = bot;
@@ -101,7 +116,17 @@ async function handleTelegramWebhook(update, env = {}) {
     }
 
     const bot = getWebhookBot(token);
-    return bot.processUpdate(update);
+    try {
+        return await bot.processUpdate(update);
+    } catch (err) {
+        // If processing failed unexpectedly, remove deduplication record so Telegram retry can re-attempt
+        if (update.update_id) {
+            await prisma.telegramUpdate.delete({
+                where: { updateId: String(update.update_id) },
+            }).catch(() => {});
+        }
+        throw err;
+    }
 }
 
 /**
@@ -123,16 +148,25 @@ async function startBot() {
 
     registerStartCommand(bot);
 
-    bot.on("callback_query", (query) => {
-        handleCallbackQuery(bot, query).catch((error) => {
-            console.error("Callback handler error:", error);
-        });
+    bot.on("callback_query", async (query) => {
+        try {
+            return await handleCallbackQuery(bot, query);
+        } catch (error) {
+            console.error("[Bot] Callback handler error:", error.message || error);
+            try {
+                await bot.answerCallbackQuery(query.id);
+            } catch (_) {}
+            throw error;
+        }
     });
 
-    bot.on("message", (msg) => {
-        handleMessage(bot, msg).catch((error) => {
-            console.error("Message handler error:", error);
-        });
+    bot.on("message", async (msg) => {
+        try {
+            return await handleMessage(bot, msg);
+        } catch (error) {
+            console.error("[Bot] Message handler error:", error.message || error);
+            throw error;
+        }
     });
 
     bot.on("polling_error", (error) => {

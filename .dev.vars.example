@@ -1,0 +1,23 @@
+# =============================================================================
+# Cloudflare Workers Local Development Secrets (.dev.vars)
+# =============================================================================
+#
+# INSTRUCTIONS:
+# 1. Copy this file to `.dev.vars` (which is git-ignored):
+#      cp .dev.vars.example .dev.vars
+# 2. Fill in your real development / testing secrets below.
+# 3. When you run `npm run dev:worker` (or `wrangler dev`), Wrangler automatically
+#    loads these secrets into the Worker `env` object at runtime.
+#
+# NOTE: DO NOT commit `.dev.vars` to version control.
+# For production deployment, set these using Wrangler CLI:
+#   npx wrangler secret put BOT_TOKEN
+#   npx wrangler secret put WEBHOOK_SECRET
+# =============================================================================
+
+# Telegram Bot Token from @BotFather (e.g. 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ)
+BOT_TOKEN=123456789:YOUR_LOCAL_TEST_BOT_TOKEN_HERE
+
+# Webhook Secret Token for X-Telegram-Bot-Api-Secret-Token validation
+# Generate a random 32-character string (e.g. node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
+WEBHOOK_SECRET=your_local_webhook_secret_token_here
